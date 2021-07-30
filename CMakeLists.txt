@@ -1,0 +1,9 @@
+cmake_minimum_required(VERSION 2.8 FATAL_ERROR)
+project(iterative_closest_point)
+find_package(PCL  REQUIRED)
+include_directories(${PCL_INCLUDE_DIRS})
+link_directories(${PCL_LIBRARY_DIRS})
+add_definitions(${PCL_DEFINITIONS})
+add_executable (iterative_closest_point main.cpp)
+target_link_libraries (iterative_closest_point ${PCL_LIBRARIES})
+
