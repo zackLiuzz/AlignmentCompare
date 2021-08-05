@@ -1,9 +1,10 @@
 cmake_minimum_required(VERSION 2.8 FATAL_ERROR)
 project(iterative_closest_point)
 find_package(PCL  REQUIRED)
-include_directories(${PCL_INCLUDE_DIRS})
+find_package(Sophus REQUIRED)
+include_directories(${PCL_INCLUDE_DIRS} ${Sophus_INCLLUDE_DIRS})
 link_directories(${PCL_LIBRARY_DIRS})
 add_definitions(${PCL_DEFINITIONS})
-add_executable (iterative_closest_point main.cpp)
-target_link_libraries (iterative_closest_point ${PCL_LIBRARIES})
+add_executable (iterative_closest_point main.cpp GaussNewton.cpp)
+target_link_libraries (iterative_closest_point ${PCL_LIBRARIES} ${Sophus_LIBRATIES} fmt) 
 
