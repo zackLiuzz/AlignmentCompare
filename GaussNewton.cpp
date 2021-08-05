@@ -35,10 +35,10 @@ bool OptimizedICPGN::Match(const PointCloudT::Ptr &source_cloud_ptr, const Eigen
         Eigen::Matrix<float, 6, 6> Hessian = Eigen::Matrix<float, 6, 6>::Zero();
         Eigen::Matrix<float, 6, 1> B = Eigen::Matrix<float, 6, 1>::Zero();
         pcl::console::TicToc time;
-        time.tic();
+//        time.tic();
 
         for (unsigned int j = 0; j < source_cloud_ptr->size(); ++j) {
-        	time.start();
+//        	time.tic();
             const PointT &origin_point = source_cloud_ptr->points[j];
 
             //删除距离为无穷点
@@ -51,9 +51,9 @@ bool OptimizedICPGN::Match(const PointCloudT::Ptr &source_cloud_ptr, const Eigen
             std::vector<int> indices;
             //在目标点云中搜索距离当前点最近的一个点
             kdtree_flann_ptr_->nearestKSearch(origin_point, 1, indices, resultant_distances);
-            time.stop();
-            std::cout<<std::fixed<<std::setprecision(10)<<"search time: "<<time.gettime_s()<<std::endl;
-            time.start();
+
+//            std::cout<<std::fixed<<std::setprecision(20)<<"search time: "<<time.toc()/1000<<std::endl;
+//            time.tic();
 
             //舍弃那些最近点,但是距离大于最大对应点对距离
             if (resultant_distances.front() > max_correspond_distance_) {
@@ -69,31 +69,27 @@ bool OptimizedICPGN::Match(const PointCloudT::Ptr &source_cloud_ptr, const Eigen
             Eigen::Vector3f error = origin_point_eigen - nearest_point;
 
             Eigen::Matrix<float, 3, 6> Jacobian = Eigen::Matrix<float, 3, 6>::Zero();
+//            std::cout<<std::fixed<<std::setprecision(20)<<"before jacobian time: "<<time.toc()/1000<<std::endl;
+//            time.tic();
             //构建雅克比矩阵
             Jacobian.leftCols(3) = Eigen::Matrix3f::Identity();
             Jacobian.rightCols(3) = - Sophus::SO3f::hat(origin_point_eigen);
-
+//            std::cout<<std::fixed<<std::setprecision(20)<<"jacobian time: "<<time.toc()/1000<<std::endl;
+//            time.tic();
             //构建海森矩阵
             Hessian += Jacobian.transpose() * Jacobian;
             B += -Jacobian.transpose() * error;
-            time.stop();
-            std::cout<<std::fixed<<std::setprecision(10)<<"one point time: "<<time.gettime_s()<<std::endl;
+//            std::cout<<std::fixed<<std::setprecision(20)<<"one point add time: "<<time.toc()/1000<<std::endl;
         }
-        time.stop();
-        std::cout<<"gaussnewton time: "<<time.gettime_s()<<std::endl;
-
         if (Hessian.determinant() == 0) {
             continue;
         }
-        time.start();
+        time.tic();
         Eigen::Matrix<float, 6, 1> delta_x = Hessian.inverse() * B;
-        time.stop();
-        std::cout<<"solve time elapsed: "<<time.gettime_s()<<std::endl;
-        time.start();
+//        std::cout<<"solve time elapsed: "<<time.toc()<<std::endl;
         final_transformation_.block<3, 1>(0, 3) = final_transformation_.block<3, 1>(0, 3) + delta_x.head(3);
         final_transformation_.block<3, 3>(0, 0) *= Sophus::SO3f::exp(delta_x.tail(3)).matrix();
-        time.stop();
-        std::cout<<"sophus time elapsed: "<<time.gettime_s()<<std::endl;
+
     }
 
 //    final_transformation_ = T;

@@ -31,6 +31,9 @@ public:
     	max_correspond_distance_ = max_correspond_distance;
 
     }
+    Eigen::Matrix4f get_final_transformation(){
+    	return final_transformation_;
+    }
 
     bool Match(const PointCloudT::Ptr &source_cloud_ptr,
                const Eigen::Matrix4f &predict_pose,

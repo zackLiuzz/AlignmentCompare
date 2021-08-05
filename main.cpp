@@ -11,7 +11,7 @@
 #include "GaussNewton.h"
 using namespace trunk;
 bool next_iteration = false;
-double ndt_stepsize = 0.1;
+double ndt_stepsize = 0.5;
 double ndt_resolution = 0.5;
 double ndt_outratio = 0.2;
 void keyboardEventCallback (const pcl::visualization::KeyboardEvent& event, void* nothing)
@@ -67,16 +67,16 @@ int main (int argc, char* argv[])
     Eigen::Matrix4d gt_pose = Eigen::Matrix4d::Identity ();
 
     // A rotation matrix (see https://en.wikipedia.org/wiki/Rotation_matrix)
-    double theta = M_PI_4 / 16;  // The angle of rotation in radians
+    double theta = 0/*M_PI_4 / 4*/;  // The angle of rotation in radians
     gt_pose (0, 0) = std::cos (theta);
     gt_pose (0, 1) = -sin (theta);
     gt_pose (1, 0) = sin (theta);
     gt_pose (1, 1) = std::cos (theta);
 
     // A translation on Z axis (0.4 meters)
-    gt_pose (0, 3) = 0;
+    gt_pose (0, 3) = 0.5;
     // A translation on Z axis (0.4 meters)
-    gt_pose (1, 3) = 0;
+    gt_pose (1, 3) = 0.5;
     // A translation on Z axis (0.4 meters)
     gt_pose (2, 3) = 0;
 
@@ -85,17 +85,28 @@ int main (int argc, char* argv[])
 
     // Executing the transformation
     pcl::transformPointCloud (*cloud_in, *cloud_tr, gt_pose);
-    pcl::VoxelGrid<PointT> down_size_filter;
-    down_size_filter.setLeafSize(0.05, 0.05, 0.05);
-    down_size_filter.setInputCloud(cloud_tr);
-    down_size_filter.filter(*cloud_tr);
-    down_size_filter.setInputCloud(cloud_in);
-    down_size_filter.filter(*cloud_in);
+//    pcl::VoxelGrid<PointT> down_size_filter;
+//    down_size_filter.setLeafSize(0.15, 0.15, 0.15);
+//    down_size_filter.setInputCloud(cloud_tr);
+//    down_size_filter.filter(*cloud_tr);
+//
+//    down_size_filter.setLeafSize(0.05, 0.05, 0.05);
+//    down_size_filter.setInputCloud(cloud_in);
+//    down_size_filter.filter(*cloud_in);
+
 
     *cloud_icp = *cloud_tr;  // We backup cloud_icp into cloud_tr for later use
     *cloud_ndt = *cloud_tr;  // We backup cloud_icp into cloud_tr for later use
     *cloud_gaussnewton = *cloud_tr;
     // The Iterative Closest Point algorithm
+    pcl::NormalDistributionsTransform<PointT,PointT> ndt;
+//    icp.setMaxCorrespondenceDistance(100);
+    ndt.setStepSize(ndt_stepsize);
+    ndt.setResolution(ndt_resolution);
+    ndt.setMaximumIterations(0);
+    ndt.setInputSource(cloud_ndt);
+    ndt.setInputTarget(cloud_in);
+
 
 
     OptimizedICPGN icp_gaussnewton;
@@ -110,13 +121,7 @@ int main (int argc, char* argv[])
 //    icp.align (*cloud_icp);
     icp.setMaximumIterations (1);  // We set this variable to 1 for the next time we will call .align () function
 
-    pcl::NormalDistributionsTransform<PointT,PointT> ndt;
-//    icp.setMaxCorrespondenceDistance(100);
-    ndt.setStepSize(ndt_stepsize);
-    ndt.setResolution(ndt_resolution);
-    ndt.setMaximumIterations(0);
-    ndt.setInputSource(cloud_ndt);
-    ndt.setInputTarget(cloud_in);
+
 //    ndt.setOulierRatio(ndt_outratio);
 //    ndt.align(*cloud_ndt);
 
@@ -180,7 +185,7 @@ int main (int argc, char* argv[])
     viewer.setBackgroundColor (bckgr_gray_level, bckgr_gray_level, bckgr_gray_level, v4);
 
     // Set camera position and orientation
-    viewer.setCameraPosition (-3.68332, 2.94092, 5.71266, 0.289847, 0.921947, -0.256907, 0);
+    viewer.setCameraPosition (-3.68332, 2.94092, 115.71266, 0.289847, 0.921947, -0.256907, 0);
     viewer.setSize (1920, 1080);  // Visualiser window size
 
     // Register keyboard callback :
@@ -193,50 +198,69 @@ int main (int argc, char* argv[])
 //        std::cout<<"running"<<std::endl;
 
         // The user pressed "space" :
-        if (next_iteration)
+        static int itr_count = 0;
+        if (/*next_iteration*/itr_count < 100)
         {
+        	itr_count++;
         	std::cout<<"current iteration time:  "<<iterations<<std::endl;
             // The Iterative Closest Point algorithm
             time.tic ();
             icp.align (*cloud_icp);
-            double icp_time = time.toc();
+            double icp_time = time.toc()/1000;
             time.tic ();
             ndt.align (*cloud_ndt);
-            double ndt_time = time.toc();
+            double ndt_time = time.toc()/1000;
             time.tic();
             Eigen::Matrix4f gn_result = Eigen::Matrix4f::Identity();
             icp_gaussnewton.Match(cloud_gaussnewton, Eigen::Matrix4f::Identity(), cloud_gaussnewton, gn_result);
-            double gaussneton_time = time.toc();
+            double gaussnewton_time = time.toc()/1000;
             time.tic ();
             static std::string filename = "/home/zack/Data/result.txt";
             static std::ofstream filestream (filename.c_str());
             Eigen::Matrix4d delta_matrix;
-            Eigen::Matrix4d final_transform = icp.getFinalTransformation().cast<double>();
-            delta_matrix.block<3,3>(0,0) = (final_transform.block<3,3>(0,0)).inverse() * gt_pose.block<3,3>(0,0);
+            static Eigen::Matrix4d icp_final_transform = Eigen::Matrix4d::Identity();
+            icp_final_transform = icp_final_transform * icp.getFinalTransformation().cast<double>();
+            delta_matrix.block<3,3>(0,0) = (icp_final_transform.block<3,3>(0,0))/*.transpose()*/ * gt_pose.block<3,3>(0,0);
 //            delta_matrix.block<3,3>(0,0).normalize();
-            delta_matrix(0,3) = gt_pose(0,3) - final_transform(0,3);
-            delta_matrix(1,3) = gt_pose(1,3) - final_transform(1,3);
-            delta_matrix(2,3) = gt_pose(2,3) - final_transform(2,3);
-            delta_matrix(3,3) = 0;
+            delta_matrix(0,3) = gt_pose(0,3) + icp_final_transform(0,3);
+            delta_matrix(1,3) = gt_pose(1,3) + icp_final_transform(1,3);
+            delta_matrix(2,3) = gt_pose(2,3) + icp_final_transform(2,3);
+            delta_matrix(3,3) = 1;
             std::cout<<"icp delta matrix:"<<'\n'<<delta_matrix<<std::endl;
-            std::cout<<"icp final_transform matrix:"<<'\n'<<final_transform<<std::endl;
+            std::cout<<"icp final_transform matrix:"<<'\n'<<icp_final_transform<<std::endl;
             std::cout<<"icp gt_pose matrix:"<<'\n'<<gt_pose<<std::endl;
             filestream<< iterations<<" "<<icp_time<<" "<<icp.getFitnessScore()<<" "<<std::acos(0.5 * (delta_matrix.coeff (0, 0) + delta_matrix.coeff (1, 1) + delta_matrix.coeff (2, 2) - 1))/M_PI * 180
             		<<" "<< delta_matrix.block<3,1>(0,3).norm();
 
-            final_transform = ndt.getFinalTransformation().cast<double>();
-            delta_matrix.block<3,3>(0,0) = (final_transform.block<3,3>(0,0)).inverse() * gt_pose.block<3,3>(0,0);
+            static Eigen::Matrix4d ndt_final_transform = Eigen::Matrix4d::Identity();
+            ndt_final_transform = ndt_final_transform* ndt.getFinalTransformation().cast<double>();
+            delta_matrix.block<3,3>(0,0) = (ndt_final_transform.block<3,3>(0,0)).transpose() * gt_pose.block<3,3>(0,0);
 //            delta_matrix.block<3,3>(0,0).normalize();
-            delta_matrix(0,3) = gt_pose(0,3) - final_transform(0,3);
-            delta_matrix(1,3) = gt_pose(1,3) - final_transform(1,3);
-            delta_matrix(2,3) = gt_pose(2,3) - final_transform(2,3);
-            delta_matrix(3,3) = 0;
+            delta_matrix(0,3) = gt_pose(0,3) - ndt_final_transform(0,3);
+            delta_matrix(1,3) = gt_pose(1,3) - ndt_final_transform(1,3);
+            delta_matrix(2,3) = gt_pose(2,3) - ndt_final_transform(2,3);
+            delta_matrix(3,3) = 1;
             std::cout<<"ndt delta matrix:"<<'\n'<<delta_matrix<<std::endl;
-            std::cout<<"ndt final_transform matrix:"<<'\n'<<final_transform<<std::endl;
+            std::cout<<"ndt final_transform matrix:"<<'\n'<<ndt_final_transform<<std::endl;
             std::cout<<"ndt gt_pose matrix:"<<'\n'<<gt_pose<<std::endl;
 
-            filestream<<" "<<ndt_time<<" "<<ndt.hasConverged ()<<" "<<ndt.getFitnessScore()<<" "<<std::acos(0.5 * (delta_matrix.coeff (0, 0) + delta_matrix.coeff (1, 1) + delta_matrix.coeff (2, 2) - 1))/M_PI * 180
-            		<<" "<< delta_matrix.block<3,1>(0,3).norm()<<" "<<ndt.getTransformationProbability()<<" "<<gaussneton_time<<" "<<cloud_in->size()<<" "<<cloud_gaussnewton->size()<<std::endl;
+            filestream<<" "<<iterations<<" "<<ndt_time<<" "<<ndt.getFitnessScore()<<" "<<std::acos(0.5 * (delta_matrix.coeff (0, 0) + delta_matrix.coeff (1, 1) + delta_matrix.coeff (2, 2) - 1))/M_PI * 180
+            		<<" "<< delta_matrix.block<3,1>(0,3).norm();
+
+            static Eigen::Matrix4d gaussnewton_final_transform = Eigen::Matrix4d::Identity();
+            gaussnewton_final_transform = gaussnewton_final_transform * icp_gaussnewton.get_final_transformation().cast<double>();
+            delta_matrix.block<3,3>(0,0) = (gaussnewton_final_transform.block<3,3>(0,0))/*.transpose()*/ * gt_pose.block<3,3>(0,0);
+//            delta_matrix.block<3,3>(0,0).normalize();
+            delta_matrix(0,3) = gt_pose(0,3) + gaussnewton_final_transform(0,3);
+            delta_matrix(1,3) = gt_pose(1,3) + gaussnewton_final_transform(1,3);
+            delta_matrix(2,3) = gt_pose(2,3) + gaussnewton_final_transform(2,3);
+            delta_matrix(3,3) = 1;
+            std::cout<<"gaussnewton delta matrix:"<<'\n'<<delta_matrix<<std::endl;
+            std::cout<<"gaussnewton final_transform matrix:"<<'\n'<<gaussnewton_final_transform<<std::endl;
+            std::cout<<"gaussnewton gt_pose matrix:"<<'\n'<<gt_pose<<std::endl;
+
+            filestream<<" "<<iterations<<" "<<gaussnewton_time<<" "<<icp_gaussnewton.GetFitnessScore()<<" "<<std::acos(0.5 * (delta_matrix.coeff (0, 0) + delta_matrix.coeff (1, 1) + delta_matrix.coeff (2, 2) - 1))/M_PI * 180
+            		<<" "<< delta_matrix.block<3,1>(0,3).norm()<<std::endl;
 
 
             if (icp.hasConverged ())
@@ -281,7 +305,7 @@ int main (int argc, char* argv[])
                 return (-1);
             }
             iterations++;
-            std::cout<<"chores time elapsed: "<<time.toc()<<std::endl;
+            std::cout<<"chores time elapsed: "<<time.toc()/1000<<std::endl;
         }
         next_iteration = false;
     }
